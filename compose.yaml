@@ -1,7 +1,32 @@
 services:
+  db:
+    image: postgres:16
+    container_name: ardshinbank_news_monitor_db
+    restart: always
+    environment:
+      POSTGRES_DB: news_monitor_db
+      POSTGRES_USER: news_user
+      POSTGRES_PASSWORD: change_this_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U news_user -d news_monitor_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   news_monitor:
     build: .
     container_name: ardshinbank_news_monitor
     restart: always
     environment:
       - TZ=Asia/Yerevan
+    env_file:
+      - .env
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
