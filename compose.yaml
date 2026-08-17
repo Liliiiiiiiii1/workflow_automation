@@ -1,0 +1,7 @@
+services:
+  news_monitor:
+    build: .
+    container_name: ardshinbank_news_monitor
+    restart: always
+    environment:
+      - TZ=Asia/Yerevan
