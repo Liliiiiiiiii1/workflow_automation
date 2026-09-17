@@ -1,0 +1,18 @@
+# Environment variables
+.env
+.env.*
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Node modules
+node_modules/
+
+# n8n local data
+.n8n/
+
+# Temporary files
+*.tmp

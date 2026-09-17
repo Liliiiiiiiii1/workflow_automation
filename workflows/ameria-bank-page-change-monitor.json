@@ -1,0 +1,566 @@
+{
+  "name": "Ameria Bank Page Change Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const d = $json;\n\nconst pageName = d.page_name || 'Unknown page';\nconst pageUrl = d.page_url || '';\n\nconst html = `\n<h2>Page Monitor - Daily Check</h2>\n\n<h3>${pageName}</h3>\n\n<p>\n  <a href=\"${pageUrl}\">${pageUrl}</a>\n</p>\n\n<p>No changes were detected on this page today.</p>\n\n<hr>\n\n<p style=\"font-size:12px;color:#666;\">\nGenerated automatically by n8n Page Monitor.\n</p>\n`;\n\nreturn {\n  json: {\n    subject: `Page Monitor - ${pageName} (No changes)`,\n    html\n  }\n};"
+      },
+      "id": "38ad8431-3cf5-4785-9171-045328498516",
+      "name": "Build No-Change Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -7408,
+        2688
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "liligrigoryan977@gmail.com",
+        "toEmail": "liligrigoryan977@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "82a50dba-4e3d-48f7-b30d-5a40c1cbdfee",
+      "name": "Send No-Change Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -7184,
+        2688
+      ],
+      "webhookId": "912c6206-7bb3-4bdf-9fb6-71c27ba6ad72",
+      "credentials": {
+        "smtp": {
+          "id": "hNqK1HNDmv26gbvy",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const page = $('Get Monitored Pages2').item.json;\nconst err = $json.error || $json;\nconst message = err.message || err.description || 'Unknown error';\n\nfunction escapeHtml(s = '') {\n  return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;');\n}\n\nconst html = `\n  <h2>Page Monitor - Fetch Failed</h2>\n  <h3>${escapeHtml(page.name)}</h3>\n  <p><a href=\"${escapeHtml(page.url)}\">${escapeHtml(page.url)}</a></p>\n  <p style=\"color:#c00\"><strong>Error:</strong> ${escapeHtml(message)}</p>\n  <p>This page could not be checked today (after automatic retries). It will be retried again on the next scheduled run.</p>\n  <hr><p style=\"font-size:12px;color:#666\">Generated automatically by n8n Page Monitor.</p>`;\n\nreturn { json: { subject: `Page Monitor Error - ${page.name}`, html } };"
+      },
+      "id": "66076bdc-bd93-4995-a594-1f9e2188322c",
+      "name": "Build Error Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -8736,
+        2848
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "liligrigoryan977@gmail.com",
+        "toEmail": "liligrigoryan977@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "441700ed-c9e3-43d8-8ec2-4b629d39a5a3",
+      "name": "Send Error Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -8512,
+        2848
+      ],
+      "webhookId": "60893fc5-44d2-41bc-9bf8-7ff41422a0a7",
+      "credentials": {
+        "smtp": {
+          "id": "hNqK1HNDmv26gbvy",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "e49e5581-04de-4873-9167-7e66a7cd0ed2",
+      "name": "Schedule Trigger1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -9392,
+        2720
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, name, url FROM page_monitor.pages WHERE enabled = TRUE ORDER BY id;",
+        "options": {}
+      },
+      "id": "d79f729a-322e-4efd-96dd-58aff6f0a7aa",
+      "name": "Get Monitored Pages2",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -9168,
+        2720
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "IVJKVPBbca4HLn7n",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "neverError": true,
+              "responseFormat": "text"
+            }
+          },
+          "timeout": 30000
+        }
+      },
+      "id": "b3043f77-3d13-4116-89f7-de0dc5bc5c4a",
+      "name": "Fetch Page1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -8944,
+        2720
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 5000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const page = $('Get Monitored Pages2').item.json;\nconst html = $json.data || $json.body || $json;\n\nlet text = String(html)\n  .replace(/<script[\\s\\S]*?<\\/script>/gi, ' ')\n  .replace(/<style[\\s\\S]*?<\\/style>/gi, ' ')\n  .replace(/<!--[\\s\\S]*?-->/g, ' ')\n  .replace(/<[^>]+>/g, ' ')\n  .replace(/&nbsp;/g, ' ')\n  .replace(/\\s+/g, ' ')\n  .trim();\n\nreturn {\n  json: {\n    page_id: page.id,\n    page_name: page.name,\n    page_url: page.url,\n    content_text: text\n  }\n};"
+      },
+      "id": "d18d4697-bff4-43df-b148-37c9f3db9204",
+      "name": "Extract & Hash1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -8736,
+        2576
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n    s.content_hash,\n    s.content_text,\n    s.captured_at\nFROM (SELECT $1::integer AS page_id) p\nLEFT JOIN LATERAL (\n    SELECT content_hash, content_text, captured_at\n    FROM page_monitor.snapshots\n    WHERE page_id = p.page_id\n    ORDER BY captured_at DESC\n    LIMIT 1\n) s ON TRUE;",
+        "options": {
+          "queryReplacement": "={{ $json.page_id }}"
+        }
+      },
+      "id": "72b4f016-c3e6-4455-853b-d8c93d23b968",
+      "name": "Get Latest Snapshot1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -8288,
+        2576
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "IVJKVPBbca4HLn7n",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const extracted = $('Extract & Hash1').item.json;\nconst hashed = $('Crypto').item.json;\n\n// Previous snapshot\nconst oldHash = $json.content_hash || '';\nconst oldText = $json.content_text || '';\n\n// Current page information comes from Extract & Hash1\nconst pageId = extracted.page_id;\nconst pageName = extracted.page_name;\nconst pageUrl = extracted.page_url;\n\n// Current page\nconst newHash = hashed.content_hash;\nconst newText = extracted.content_text || '';\n\nif (!pageId) {\n  throw new Error('page_id is missing from Extract & Hash1.');\n}\n\nif (!newHash) {\n  throw new Error('Crypto did not produce content_hash.');\n}\n\n// First snapshot = baseline\nif (!oldHash || !oldText) {\n  return {\n    json: {\n      page_id: pageId,\n      page_name: pageName,\n      page_url: pageUrl,\n\n      changed: false,\n      is_baseline: true,\n\n      old_hash: '',\n      new_hash: newHash,\n\n      old_text: '',\n      new_text: newText,\n\n      added: [],\n      removed: [],\n\n      added_count: 0,\n      removed_count: 0,\n      changed_count: 0\n    }\n  };\n}\n\n// No change\nif (oldHash === newHash) {\n  return {\n    json: {\n      page_id: pageId,\n      page_name: pageName,\n      page_url: pageUrl,\n\n      changed: false,\n      is_baseline: false,\n\n      old_hash: oldHash,\n      new_hash: newHash,\n\n      old_text: oldText,\n      new_text: newText,\n\n      added: [],\n      removed: [],\n\n      added_count: 0,\n      removed_count: 0,\n      changed_count: 0\n    }\n  };\n}\n\n// Normalize text\nfunction normalize(text) {\n  return String(text || '')\n    .replace(/\\s+/g, ' ')\n    .trim();\n}\n\nconst oldWords = normalize(oldText).split(' ').filter(Boolean);\nconst newWords = normalize(newText).split(' ').filter(Boolean);\n\n// LCS word-level comparison\nconst m = oldWords.length;\nconst n = newWords.length;\n\nconst dp = Array.from(\n  { length: m + 1 },\n  () => new Array(n + 1).fill(0)\n);\n\nfor (let i = m - 1; i >= 0; i--) {\n  for (let j = n - 1; j >= 0; j--) {\n    if (oldWords[i] === newWords[j]) {\n      dp[i][j] = dp[i + 1][j + 1] + 1;\n    } else {\n      dp[i][j] = Math.max(\n        dp[i + 1][j],\n        dp[i][j + 1]\n      );\n    }\n  }\n}\n\nconst added = [];\nconst removed = [];\n\nlet i = 0;\nlet j = 0;\n\nwhile (i < m && j < n) {\n\n  if (oldWords[i] === newWords[j]) {\n    i++;\n    j++;\n  }\n\n  else if (dp[i + 1][j] >= dp[i][j + 1]) {\n    removed.push(oldWords[i]);\n    i++;\n  }\n\n  else {\n    added.push(newWords[j]);\n    j++;\n  }\n}\n\nwhile (i < m) {\n  removed.push(oldWords[i]);\n  i++;\n}\n\nwhile (j < n) {\n  added.push(newWords[j]);\n  j++;\n}\n\nconst MAX_ITEMS = 150;\n\nconst addedLimited = added.slice(0, MAX_ITEMS);\nconst removedLimited = removed.slice(0, MAX_ITEMS);\n\nreturn {\n  json: {\n    page_id: pageId,\n    page_name: pageName,\n    page_url: pageUrl,\n\n    changed: true,\n    is_baseline: false,\n\n    old_hash: oldHash,\n    new_hash: newHash,\n\n    old_text: oldText,\n    new_text: newText,\n\n    added: addedLimited,\n    removed: removedLimited,\n\n    added_count: added.length,\n    removed_count: removed.length,\n\n    changed_count: added.length + removed.length\n  }\n};"
+      },
+      "id": "3d0fa6c7-b525-42a4-ab41-4119447c6066",
+      "name": "Compare1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -8064,
+        2576
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO page_monitor.snapshots\n    (page_id, content_hash, content_text, captured_at)\nSELECT\n    {{ $json.page_id }},\n    '{{ $json.new_hash }}',\n    '{{ $json.new_text.replaceAll(\"'\", \"''\") }}',\n    NOW();",
+        "options": {
+          "queryReplacement": "={{ $json.page_id }} {{ $json.new_hash }} {{ $json.new_text }}"
+        }
+      },
+      "id": "a07e774e-cbd2-4a0d-b847-a1b84191c1fb",
+      "name": "Save Snapshot1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -7840,
+        2576
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "IVJKVPBbca4HLn7n",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $json.changed }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            },
+            {
+              "id": "cond2",
+              "leftValue": "={{ $json.is_baseline }}",
+              "rightValue": false,
+              "operator": {
+                "type": "boolean",
+                "operation": "false",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "0d89025a-870b-42b2-a85f-ad3f9aed7d71",
+      "name": "If Changed1",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        -7616,
+        2576
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const items = $input.all();\n\nfunction escapeHtml(value = '') {\n  return String(value)\n    .replaceAll('&', '&amp;')\n    .replaceAll('<', '&lt;')\n    .replaceAll('>', '&gt;')\n    .replaceAll('\"', '&quot;')\n    .replaceAll(\"'\", '&#39;');\n}\n\nconst changedPages = items.filter(\n  item => item.json.changed === true\n);\n\nif (changedPages.length === 0) {\n  return [\n    {\n      json: {\n        subject: 'Page Monitor - No Changes',\n        html: `\n          <h2>Page Monitor - Daily Check</h2>\n          <p>No changes were detected on any monitored page.</p>\n          <hr>\n          <p style=\"font-size:12px;color:#666\">\n            Generated automatically by n8n Page Monitor.\n          </p>\n        `\n      }\n    }\n  ];\n}\n\nlet html = `\n<h1>Page Changes Detected</h1>\n\n<p>\n<strong>${changedPages.length}</strong>\npage${changedPages.length === 1 ? '' : 's'} changed.\n</p>\n`;\n\nfor (const item of changedPages) {\n\n  const d = item.json;\n\n  const added = Array.isArray(d.added) ? d.added : [];\n  const removed = Array.isArray(d.removed) ? d.removed : [];\n\n  html += `\n  <div style=\"\n    margin-bottom:40px;\n    padding-bottom:30px;\n    border-bottom:1px solid #ccc;\n  \">\n\n    <h2>${escapeHtml(d.page_name)}</h2>\n\n    <p>\n      <a href=\"${escapeHtml(d.page_url)}\">\n        ${escapeHtml(d.page_url)}\n      </a>\n    </p>\n  `;\n\n  if (removed.length > 0) {\n    html += `\n      <h3 style=\"color:#c00;\">Removed</h3>\n      <div style=\"\n        background:#fff1f1;\n        padding:12px;\n        border-left:4px solid #c00;\n        margin-bottom:15px;\n      \">\n        ${escapeHtml(removed.join(' '))}\n      </div>\n    `;\n  }\n\n  if (added.length > 0) {\n    html += `\n      <h3 style=\"color:#080;\">Added</h3>\n      <div style=\"\n        background:#f1fff1;\n        padding:12px;\n        border-left:4px solid #080;\n        margin-bottom:15px;\n      \">\n        ${escapeHtml(added.join(' '))}\n      </div>\n    `;\n  }\n\n  html += `\n    <p style=\"font-size:12px;color:#666;\">\n      ${d.added_count || 0} words added,\n      ${d.removed_count || 0} words removed.\n    </p>\n\n  </div>\n  `;\n}\n\nhtml += `\n<hr>\n<p style=\"font-size:12px;color:#666;\">\nGenerated automatically by n8n Page Monitor.\n</p>\n`;\n\nreturn [\n  {\n    json: {\n      subject: `Page Update - ${changedPages.length} page${changedPages.length === 1 ? '' : 's'} changed`,\n      html: html,\n      changed_count: changedPages.length\n    }\n  }\n];"
+      },
+      "id": "0fcaa2e7-30c1-4ec8-a5e4-d7c981490b62",
+      "name": "Build Combined Diff Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -7408,
+        2368
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "liligrigoryan977@gmail.com",
+        "toEmail": "liligrigoryan977@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "b9167512-48a2-459b-bbbc-57d43fbe88e6",
+      "name": "Send Change Report1",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -7232,
+        2368
+      ],
+      "webhookId": "fce79f3c-17a4-4e23-a811-0723d8d0d236",
+      "credentials": {
+        "smtp": {
+          "id": "hNqK1HNDmv26gbvy",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "value": "={{ $json.content_text }}",
+        "dataPropertyName": "content_hash"
+      },
+      "type": "n8n-nodes-base.crypto",
+      "typeVersion": 2,
+      "position": [
+        -8512,
+        2576
+      ],
+      "id": "fc9268bb-c4cc-47b6-839c-d537ab9b7fa6",
+      "name": "Crypto"
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "1KBxvxGKIyVDQ9k4tA7xy0PK3sP5MUj2N5xQsYOZkOC8",
+          "mode": "list",
+          "cachedResultName": "AmeriaBank_Page_History",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KBxvxGKIyVDQ9k4tA7xy0PK3sP5MUj2N5xQsYOZkOC8/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": 2085673167,
+          "mode": "list",
+          "cachedResultName": "History",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1KBxvxGKIyVDQ9k4tA7xy0PK3sP5MUj2N5xQsYOZkOC8/edit#gid=2085673167"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "timestamp": "={{ $now }}",
+            "page": "={{ $json.page_name }}",
+            "old_content": "={{ $json.old_text }}",
+            "new_content": "={{ $json.new_text }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "timestamp",
+              "displayName": "timestamp",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "page",
+              "displayName": "page",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "old_content",
+              "displayName": "old_content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "new_content",
+              "displayName": "new_content",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        -7280,
+        2560
+      ],
+      "id": "4f5cb1b1-7084-4846-83d4-2e7dbdb2d226",
+      "name": "Append row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "Og9a7HgpqOKviL3A",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Build Error Email": {
+      "main": [
+        [
+          {
+            "node": "Send Error Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Get Monitored Pages2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Monitored Pages2": {
+      "main": [
+        [
+          {
+            "node": "Fetch Page1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Page1": {
+      "main": [
+        [
+          {
+            "node": "Extract & Hash1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Error Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract & Hash1": {
+      "main": [
+        [
+          {
+            "node": "Crypto",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Latest Snapshot1": {
+      "main": [
+        [
+          {
+            "node": "Compare1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Compare1": {
+      "main": [
+        [
+          {
+            "node": "Save Snapshot1",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "If Changed1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Changed1": {
+      "main": [
+        [
+          {
+            "node": "Build Combined Diff Report",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Append row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build No-Change Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Crypto": {
+      "main": [
+        [
+          {
+            "node": "Get Latest Snapshot1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Combined Diff Report": {
+      "main": [
+        [
+          {
+            "node": "Send Change Report1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Append row in sheet": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "e6b82774-2fc9-4582-b141-d169ad356fe1",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1ac6e24905d07ca5cc27cc3bb03bf505ddeaca6a1f6d58beadba6dfe9378b152"
+  },
+  "nodeGroups": [],
+  "id": "5neQscDbtxXvkZip",
+  "tags": []
+}

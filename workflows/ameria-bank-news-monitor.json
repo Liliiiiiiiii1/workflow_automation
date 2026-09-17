@@ -1,0 +1,329 @@
+{
+  "name": "Ameria Bank News Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "cond1",
+              "leftValue": "={{ $json.article_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "eb8a99c5-9367-4070-9cb4-a9824c9eb11f",
+      "name": "Has New Article?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        80,
+        368
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "1b22dd47-dfa0-44f0-92f7-bcc1e290ef86",
+      "name": "No New Article (Skip)",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        288,
+        448
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 8
+            }
+          ]
+        }
+      },
+      "id": "7e10b82b-f7c9-46db-8888-c33a8f5fec26",
+      "name": "Schedule Trigger1",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1472,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, name, source_type, listing_url\nFROM news_monitor.sources\nWHERE enabled = TRUE\n  AND source_type = 'rss'\n  AND name = 'Ameria Bank'\nORDER BY id\nLIMIT 1;",
+        "options": {}
+      },
+      "id": "38941d21-9e72-4384-9e6f-d3e3ecd15b79",
+      "name": "Get RSS Source1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -1248,
+        368
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "IVJKVPBbca4HLn7n",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.listing_url }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "Mozilla/5.0"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "text"
+            }
+          }
+        }
+      },
+      "id": "404cb17c-40d0-4e70-9080-e8f9b5cf8908",
+      "name": "Fetch Feed1",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -1040,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const source = $('Get RSS Source1').first().json;\nconst xml = $input.first().json.data || $input.first().json.body || $input.first().json;\n\nconst itemsRaw = xml.match(/<item>[\\s\\S]*?<\\/item>/g) || [];\n\nfunction extract(tag, str) {\n  const m = str.match(new RegExp(`<${tag}>([\\\\s\\\\S]*?)<\\\\/${tag}>`));\n  if (!m) return '';\n  return m[1].replace('<![CDATA[', '').replace(']]>', '').trim();\n}\n\nconst items = itemsRaw.map((raw) => ({\n  title: extract('title', raw),\n  link: extract('link', raw),\n  pubDate: extract('pubDate', raw),\n  description: extract('description', raw),\n}));\n\n// Instead of stopping the workflow when the feed has no items,\n// pass a flag through so downstream nodes can build a \"no update\" email.\nif (items.length === 0) {\n  return [{\n    json: {\n      source_id: source.id,\n      source_name: source.name,\n      no_articles_found: true\n    }\n  }];\n}\n\nconst getDate = (item) => {\n  const t = new Date(item.pubDate).getTime();\n  return Number.isNaN(t) ? 0 : t;\n};\n\nitems.sort((a, b) => getDate(b) - getDate(a));\nconst latest = items[0];\n\nreturn [{\n  json: {\n    source_id: source.id,\n    source_name: source.name,\n    title: latest.title || 'Untitled article',\n    url: latest.link || '',\n    published_at: latest.pubDate || null,\n    summary: latest.description || ''\n  }\n}];"
+      },
+      "id": "db3efa71-28c1-473b-bc7b-04fdfe76dcab",
+      "name": "Parse & Keep Latest1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -816,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO news_monitor.articles\n  (source_id, title, url, published_at, summary)\nVALUES ($1, $2, $3, NULLIF($4, '')::TIMESTAMPTZ, $5)\nON CONFLICT (source_id, url) DO NOTHING\nRETURNING id, source_id, title, url, published_at, summary, discovered_at;",
+        "options": {
+          "queryReplacement": "={{ [\n  $json.source_id,\n  $json.title,\n  $json.url,\n  $json.published_at || '',\n  $json.summary || ''\n] }}"
+        }
+      },
+      "id": "e964d74f-e4d5-4454-a04f-013f1b4e0c19",
+      "name": "Insert If New1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        -592,
+        368
+      ],
+      "alwaysOutputData": true,
+      "credentials": {
+        "postgres": {
+          "id": "IVJKVPBbca4HLn7n",
+          "name": "Postgres account"
+        }
+      },
+      "continueOnFail": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const article = $json;\nconst parsed = $('Parse & Keep Latest1').first().json;\nconst source = parsed.source_name;\n\nconst escapeHtml = (s = '') => String(s)\n  .replaceAll('&', '&amp;').replaceAll('<', '&lt;')\n  .replaceAll('>', '&gt;').replaceAll('\"', '&quot;')\n  .replaceAll(\"'\", '&#039;');\n\n// No new article: either the feed had nothing, or the latest item\n// was already in the database (Insert If New returned 0 rows).\nconst hasNewArticle = !parsed.no_articles_found && !!article.id;\n\nif (!hasNewArticle) {\n  const html = `\n    <h2>Daily News Update</h2>\n    <h3>${escapeHtml(source)}</h3>\n    <p>Today we don't have any update.</p>\n    <hr><p style=\"font-size:12px;color:#666\">Generated automatically by n8n News Monitor.</p>`;\n\n  return {\n    json: {\n      article_id: null,\n      subject: `News Update - ${source} (No new articles)`,\n      html\n    }\n  };\n}\n\nconst title = escapeHtml(article.title);\nconst summary = escapeHtml(article.summary || '');\nconst url = escapeHtml(article.url);\nconst publishedAt = article.published_at\n  ? new Date(article.published_at).toLocaleString('en-GB', { timeZone: 'Asia/Yerevan' })\n  : 'Date unavailable';\n\nconst html = `\n  <h2>Daily News Update</h2>\n  <h3>${escapeHtml(source)}</h3>\n  <p><strong>${title}</strong></p>\n  <p>${publishedAt}</p>\n  ${summary ? `<p>${summary}</p>` : ''}\n  <p><a href=\"${url}\">Read full article</a></p>\n  <hr><p style=\"font-size:12px;color:#666\">Generated automatically by n8n News Monitor.</p>`;\n\nreturn { json: { article_id: article.id, subject: `News Update - ${source}`, html } };"
+      },
+      "id": "20651124-ebb8-4ad2-b892-f9650096209c",
+      "name": "Build Email1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        368
+      ]
+    },
+    {
+      "parameters": {
+        "fromEmail": "liligrigoryan977@gmail.com",
+        "toEmail": "liligrigoryan977@gmail.com",
+        "subject": "={{ $json.subject }}",
+        "html": "={{ $json.html }}",
+        "options": {}
+      },
+      "id": "64606f8d-3b3f-460a-b5e4-dac903c41882",
+      "name": "Send Email1",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 2.1,
+      "position": [
+        -160,
+        368
+      ],
+      "webhookId": "4242d2d2-14af-44ab-8729-3c8e5890ed2c",
+      "credentials": {
+        "smtp": {
+          "id": "hNqK1HNDmv26gbvy",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE news_monitor.articles\nSET emailed_at = CURRENT_TIMESTAMP\nWHERE id = $1\nRETURNING id, title, emailed_at;",
+        "options": {
+          "queryReplacement": "={{ [ $json.article_id ] }}"
+        }
+      },
+      "id": "63b4eb6c-22c4-4a06-8772-e1e5d1bd4dc9",
+      "name": "Mark As Emailed1",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.5,
+      "position": [
+        288,
+        288
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "IVJKVPBbca4HLn7n",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Has New Article?": {
+      "main": [
+        [
+          {
+            "node": "Mark As Emailed1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No New Article (Skip)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger1": {
+      "main": [
+        [
+          {
+            "node": "Get RSS Source1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get RSS Source1": {
+      "main": [
+        [
+          {
+            "node": "Fetch Feed1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Feed1": {
+      "main": [
+        [
+          {
+            "node": "Parse & Keep Latest1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse & Keep Latest1": {
+      "main": [
+        [
+          {
+            "node": "Insert If New1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Insert If New1": {
+      "main": [
+        [
+          {
+            "node": "Build Email1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email1": {
+      "main": [
+        [
+          {
+            "node": "Send Email1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email1": {
+      "main": [
+        [
+          {
+            "node": "Has New Article?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "availableInMCP": false
+  },
+  "versionId": "a1e8c1e0-d341-44ad-ab58-7c2cc71e7a85",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "1ac6e24905d07ca5cc27cc3bb03bf505ddeaca6a1f6d58beadba6dfe9378b152"
+  },
+  "nodeGroups": [],
+  "id": "EPnJgJWqbQg7qKtr",
+  "tags": []
+}
